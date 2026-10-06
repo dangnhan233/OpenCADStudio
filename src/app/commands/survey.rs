@@ -34,6 +34,36 @@ impl OpenCADStudio {
             }
         }
 
+        if let Some(rest) = cmd.strip_prefix("EXPORTDXF").map(str::trim) {
+            let parts: Vec<&str> = rest.split_whitespace().collect();
+            if parts.is_empty() {
+                self.command_line.push_error("EXPORTDXF: specify survey TXT/CSV input and optional DXF output path.");
+                return Some(Task::none());
+            }
+            let input = std::path::PathBuf::from(parts[0].trim_matches('"'));
+            let output = parts.get(1).map(|v| std::path::PathBuf::from(v.trim_matches('"')))
+                .unwrap_or_else(|| input.with_extension("dxf"));
+            let dx = parts.get(2).and_then(|v| v.parse::<f64>().ok()).unwrap_or(1.0);
+            let dy = parts.get(3).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+            if dx == 0.0 && dy == 0.0 {
+                self.command_line.push_error("EXPORTDXF: direction must not be zero.");
+                return Some(Task::none());
+            }
+            match crate::survey::parse_file(&input) {
+                Ok(import) => match crate::survey::export_dxf_survey_file(&output, &import, crate::survey::HouseNumberingConfig {
+                    start_x: 0.0, start_y: 0.0, dir_x: dx, dir_y: dy,
+                }) {
+                    Ok(()) => {
+                        let count = import.drawable_points().count();
+                        self.command_line.push_output(crate::tf!("EXPORTDXF: wrote {} survey point(s) plus line/text geometry to {}.", count, output.display()).as_ref());
+                    }
+                    Err(e) => self.command_line.push_error(crate::tf!("EXPORTDXF: {e}").as_ref()),
+                },
+                Err(e) => self.command_line.push_error(crate::tf!("EXPORTDXF: {e}").as_ref()),
+            }
+            return Some(Task::none());
+        }
+
         if let Some(rest) = cmd.strip_prefix("EXPORTKML").map(str::trim) {
             let parts: Vec<&str> = rest.split_whitespace().collect();
             if parts.is_empty() {
@@ -129,5 +159,5 @@ impl OpenCADStudio {
 }
 
 inventory::submit!(crate::command::CommandRegistration {
-    names: &["IMPORTSURVEY", "SURVEYIMPORT", "NUMBERHOUSES", "EXPORTKML"]
+    names: &["IMPORTSURVEY", "SURVEYIMPORT", "NUMBERHOUSES", "EXPORTKML", "EXPORTDXF"]
 });
