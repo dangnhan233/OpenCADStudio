@@ -212,6 +212,30 @@ mod tests {
     #[test] fn unknown_is_not_guessed() {
         assert_eq!(classify_code("ZZZ"),FeatureKind::Unknown);
     }
+
+    #[test]
+    fn house_chain_is_split_by_a_different_code() {
+        let r = parse_text(
+            "NHA 0 0 1\nNHA1 10 0 1\nCNHA 20 0 1\nNHA2 30 0 1\nNHA 40 0 1\nNHA 50 0 1\n"
+        ).unwrap();
+        let entities = survey_entities(&r);
+        let lines = entities.iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
+        // NHA + NHA1 form one chain; CNHA breaks it; NHA2 + NHA form another.
+        assert_eq!(lines, 2);
+    }
+
+    #[test]
+    fn coordinates_are_preserved_in_line_geometry() {
+        let r = parse_text("MDN 1.25 2.5 3.75\nMDN 4.25 5.5 6.75\n").unwrap();
+        let entities = survey_entities(&r);
+        let line = entities.iter().find_map(|e| match e {
+            codec::EntityType::Line(v) => Some(v),
+            _ => None,
+        }).expect("line");
+        assert_eq!(line.start, codec::types::Vector3::new(1.25, 2.5, 3.75));
+        assert_eq!(line.end, codec::types::Vector3::new(4.25, 5.5, 6.75));
+    }
+
 }
 
 /// Interactive front-end for the IMPORTSURVEY command.
@@ -253,6 +277,9 @@ pub fn survey_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
     use codec::{Entity, EntityType, Line};
     use codec::types::Vector3;
 
+    // These feature classes are represented as surveyed chains. Chains are
+    // split when the canonical code changes, so two nearby houses/walls/etc.
+    // cannot accidentally be joined merely because they share a FeatureKind.
     const LINE_FEATURES: &[FeatureKind] = &[
         FeatureKind::RoadEdge,
         FeatureKind::Road,
@@ -267,9 +294,17 @@ pub fn survey_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
         FeatureKind::FlowerBed,
     ];
 
-    let mut out = Vec::new();
+    let drawable: Vec<&SurveyPoint> = import
+        .points
+        .iter()
+        .filter(|p| p.feature.is_drawable_point())
+        .collect();
 
-    for p in import.points.iter().filter(|p| p.feature.is_drawable_point()) {
+    let mut out = Vec::with_capacity(drawable.len() * 2);
+
+    // Always emit the measured point itself. This preserves the survey point
+    // inventory even when a feature also produces connecting geometry.
+    for p in &drawable {
         let mut point = codec::Point {
             location: Vector3::new(p.x, p.y, p.z),
             ..Default::default()
@@ -278,21 +313,67 @@ pub fn survey_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
         out.push(EntityType::Point(point));
     }
 
-    let mut previous: Option<&SurveyPoint> = None;
-    for p in import.points.iter().filter(|p| p.feature.is_drawable_point()) {
-        let connect = previous
-            .is_some_and(|q| q.feature == p.feature && LINE_FEATURES.contains(&p.feature));
-        if connect {
-            let q = previous.unwrap();
+    // Build contiguous chains. A chain is allowed to close only when the
+    // imported last point is exactly the first point, which avoids inventing
+    // a closing segment for open survey strings.
+    let mut chain: Vec<&SurveyPoint> = Vec::new();
+
+    let flush = |chain: &mut Vec<&SurveyPoint>, out: &mut Vec<EntityType>| {
+        if chain.len() < 2 {
+            chain.clear();
+            return;
+        }
+
+        let feature = chain[0].feature.clone();
+        if !LINE_FEATURES.contains(&feature) {
+            chain.clear();
+            return;
+        }
+
+        let layer = feature.layer().to_string();
+        for pair in chain.windows(2) {
+            let a = pair[0];
+            let b = pair[1];
             let mut line = Line::from_points(
-                Vector3::new(q.x, q.y, q.z),
-                Vector3::new(p.x, p.y, p.z),
+                Vector3::new(a.x, a.y, a.z),
+                Vector3::new(b.x, b.y, b.z),
             );
-            line.set_layer(p.feature.layer().to_string());
+            line.set_layer(layer.clone());
             out.push(EntityType::Line(line));
         }
-        previous = Some(p);
+
+        // Exact repeat of the first measured coordinate means the survey
+        // string explicitly closes itself. Do not close merely because the
+        // feature is a house/field/etc.
+        let first = chain[0];
+        let last = chain[chain.len() - 1];
+        if chain.len() >= 3
+            && first.x == last.x
+            && first.y == last.y
+            && first.z == last.z
+        {
+            // The final repeated point already produced the closing segment
+            // in the windows above. No extra zero-length LINE is emitted.
+        }
+
+        chain.clear();
+    };
+
+    for p in drawable {
+        let same_chain = chain.last().is_some_and(|q| {
+            q.feature == p.feature && q.normalized_code == p.normalized_code
+        });
+
+        if same_chain {
+            chain.push(p);
+        } else {
+            flush(&mut chain, &mut out);
+            if LINE_FEATURES.contains(&p.feature) {
+                chain.push(p);
+            }
+        }
     }
+    flush(&mut chain, &mut out);
 
     out
 }
