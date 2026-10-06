@@ -45,15 +45,23 @@ pub fn export_dxf(records:&[SurveyExportRecord])->String {
     out.push_str("0\\nENDTAB\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nENTITIES\\n");
     for r in records {
         let layer=feature_layer_for_code(&r.code);
-        out.push_str(&format!("0\\nPOINT\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n",dxf_escape(&layer),r.x,r.y,r.z));
+        out.push_str(&format!("0\\nPOINT\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n{}",dxf_escape(&layer),r.x,r.y,r.z,dxf_xdata(&r.code,r.house_number)));
         if let Some(n)=r.house_number {
-            out.push_str(&format!("0\\nTEXT\\n8\\nSO NHA\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n40\\n1.0\\n1\\n{}\\n",r.x,r.y,r.z,n));
+            out.push_str(&format!("0\\nTEXT\\n8\\nSO NHA\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n40\\n1.0\\n1\\n{}\\n{}",r.x,r.y,r.z,n,dxf_xdata(&r.code,Some(n))));
         }
     }
     out.push_str("0\\nENDSEC\\n0\\nEOF\\n"); out
 }
 
 fn dxf_escape(s:&str)->String { s.replace('\\n'," ").replace('\\r'," ") }
+
+/// DXF XDATA payload for SurveyCAD metadata. CODE stays verbatim; house number is numeric.
+fn dxf_xdata(code:&str, house_number:Option<usize>)->String {
+    let mut s=format!("1001\\nSURVEYCAD\\n1000\\n{}\\n",dxf_escape(code));
+    if let Some(n)=house_number { s.push_str(&format!("1071\\n{}\\n",n)); }
+    s
+}
+
 
 fn feature_layer_for_code(code:&str)->String {
     classify_code(code).layer().to_string()
@@ -78,13 +86,13 @@ pub fn export_dxf_survey(import:&SurveyImport, cfg:HouseNumberingConfig)->String
     out.push_str("0\\nENDTAB\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nENTITIES\\n");
     for p in import.drawable_points() {
         let layer=p.feature.layer();
-        out.push_str(&format!("0\\nPOINT\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n",layer,p.x,p.y,p.z));
+        out.push_str(&format!("0\\nPOINT\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n{}",layer,p.x,p.y,p.z,dxf_xdata(&p.code,None)));
     }
     let mut chain:Vec<&SurveyPoint>=Vec::new();
     let flush=|chain:&mut Vec<&SurveyPoint>,out:&mut String| {
         for pair in chain.windows(2) {
             let a=pair[0]; let b=pair[1];
-            out.push_str(&format!("0\\nLINE\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n11\\n{:.15}\\n21\\n{:.15}\\n31\\n{:.15}\\n",a.feature.layer(),a.x,a.y,a.z,b.x,b.y,b.z));
+            out.push_str(&format!("0\\nLINE\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n11\\n{:.15}\\n21\\n{:.15}\\n31\\n{:.15}\\n{}",a.feature.layer(),a.x,a.y,a.z,b.x,b.y,b.z,dxf_xdata(&a.code,None)));
         }
         chain.clear();
     };
