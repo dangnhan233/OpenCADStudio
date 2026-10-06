@@ -7,6 +7,7 @@ name: Tests
 # the tree is not rustfmt-clean and is not going to be reformatted.
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
