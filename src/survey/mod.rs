@@ -77,6 +77,43 @@ impl FeatureKind {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// Stable identity and centroid used by SurveyCAD house numbering/export.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HouseFeature {
+    pub id: usize,
+    pub point_ids: Vec<usize>,
+    pub closed: bool,
+    pub centroid_x: f64,
+    pub centroid_y: f64,
+    pub centroid_z: f64,
+}
+
+/// Extract house chains without inventing closure. Non-house records separate houses.
+pub fn house_features(import: &SurveyImport) -> Vec<HouseFeature> {
+    let mut out = Vec::new();
+    let mut chain: Vec<&SurveyPoint> = Vec::new();
+    let mut next_id = 1usize;
+    let flush = |chain: &mut Vec<&SurveyPoint>, out: &mut Vec<HouseFeature>, next_id: &mut usize| {
+        if chain.len() < 2 { chain.clear(); return; }
+        let n = chain.len() as f64;
+        let cx = chain.iter().map(|p| p.x).sum::<f64>() / n;
+        let cy = chain.iter().map(|p| p.y).sum::<f64>() / n;
+        let cz = chain.iter().map(|p| p.z).sum::<f64>() / n;
+        let closed = FeatureKind::is_explicitly_closed_chain(&chain.iter().map(|p| (*p).clone()).collect::<Vec<_>>());
+        out.push(HouseFeature { id:*next_id, point_ids:chain.iter().map(|p| p.id).collect(), closed, centroid_x:cx, centroid_y:cy, centroid_z:cz });
+        *next_id += 1;
+        chain.clear();
+    };
+    for p in &import.points {
+        if p.feature == FeatureKind::House {
+            if chain.last().is_some_and(|q| q.normalized_code == p.normalized_code) { chain.push(p); }
+            else { flush(&mut chain, &mut out, &mut next_id); chain.push(p); }
+        } else { flush(&mut chain, &mut out, &mut next_id); }
+    }
+    flush(&mut chain, &mut out, &mut next_id);
+    out
+}
+
 pub struct SurveyImport {
     pub points: Vec<SurveyPoint>,
     pub unknown_codes: BTreeSet<String>,
@@ -311,6 +348,19 @@ mod tests {
         let r = parse_text("NHA 0 0 1\\nNHA1 10 0 2\\nCNHA 10 5 3\\nNHA2 10 10 4\\nNHA 0 10 5\\n").unwrap();
         let lines = survey_entities(&r).into_iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
         assert_eq!(lines, 2);
+    }
+
+    #[test]
+    fn house_features_are_stable_and_do_not_auto_close() {
+        let r = parse_text("NHA 0 0 1\nNHA1 10 0 2\nNHA2 10 10 3\nCNHA 5 0 4\nNHA 20 0 5\nNHA1 30 0 6\nNHA2 30 10 7\nNHA 20 0 5\n").unwrap();
+        let h = house_features(&r);
+        assert_eq!(h.len(), 2);
+        assert_eq!(h[0].id, 1);
+        assert!(!h[0].closed);
+        assert_eq!(h[0].point_ids, vec![1,2,3]);
+        assert!(h[1].closed);
+        assert_eq!(h[1].point_ids, vec![5,6,7,8]);
+        assert_eq!((h[1].centroid_x, h[1].centroid_y), (25.0, 5.0));
     }
 
     #[test]
