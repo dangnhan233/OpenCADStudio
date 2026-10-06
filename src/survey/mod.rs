@@ -6,6 +6,27 @@
 use std::{collections::{BTreeMap, BTreeSet}, fmt, path::Path};
 
 pub const MAX_IMPORT_POINTS: usize = 20_000;
+#[derive(Clone, Debug, PartialEq)]
+pub struct SurveyExportRecord {
+    pub x:f64, pub y:f64, pub z:f64, pub code:String, pub house_number:Option<usize>,
+}
+
+/// KML exporter for SurveyCAD survey records. Coordinates are emitted as
+/// longitude,latitude,altitude; the caller supplies the coordinate conversion
+/// when source X/Y are projected survey coordinates.
+pub fn export_kml(records:&[SurveyExportRecord])->String {
+    fn esc(s:&str)->String { s.replace('&',"&amp;").replace('<',"&lt;").replace('>',"&gt;").replace('"',"&quot;") }
+    let mut kml=String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\\n<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document>\\n");
+    for (i,r) in records.iter().enumerate() {
+        let name=r.house_number.map(|n|format!("Nhà {n}")).unwrap_or_else(||r.code.clone());
+        kml.push_str(&format!("<Placemark><name>{}</name><ExtendedData><Data name=\"CODE\"><value>{}</value></Data>",esc(&name),esc(&r.code)));
+        if let Some(n)=r.house_number { kml.push_str(&format!("<Data name=\"HOUSE_NUMBER\"><value>{n}</value></Data>")); }
+        kml.push_str(&format!("</ExtendedData><Point><coordinates>{:.15},{:.15},{:.15}</coordinates></Point></Placemark>\\n",r.x,r.y,r.z));
+        let _=i;
+    }
+    kml.push_str("</Document></kml>\\n"); kml
+}
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurveyPoint {
