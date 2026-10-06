@@ -68,6 +68,15 @@ impl FeatureKind {
     }
 }
 
+    /// Returns true only when the measured chain explicitly repeats its
+    /// first XYZ coordinate at the end. House geometry never auto-closes.
+    pub fn is_explicitly_closed_chain(points: &[SurveyPoint]) -> bool {
+        if points.len() < 3 { return false; }
+        let first = &points[0];
+        let last = &points[points.len() - 1];
+        first.x == last.x && first.y == last.y && first.z == last.z
+    }
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurveyImport {
     pub points: Vec<SurveyPoint>,
@@ -274,6 +283,38 @@ mod tests {
     }
 
     #[test]
+    fn closed_house_chain_has_closing_segment() {
+        let r = parse_text("NHA 0 0 1\\nNHA1 10 0 2\\nNHA2 10 10 3\\nNHA 0 0 1\\n").unwrap();
+        let houses: Vec<_> = r.points.iter().filter(|p| p.feature == FeatureKind::House).collect();
+        assert!(FeatureKind::is_explicitly_closed_chain(&houses.iter().map(|p| (*p).clone()).collect::<Vec<_>>()));
+        let lines = survey_entities(&r).into_iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
+        assert_eq!(lines, 3);
+    }
+
+    #[test]
+    fn open_house_chain_is_not_auto_closed() {
+        let r = parse_text("NHA 0 0 1\\nNHA1 10 0 2\\nNHA2 10 10 3\\n").unwrap();
+        let houses: Vec<SurveyPoint> = r.points.iter().filter(|p| p.feature == FeatureKind::House).cloned().collect();
+        assert!(!FeatureKind::is_explicitly_closed_chain(&houses));
+        let lines = survey_entities(&r).into_iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
+        assert_eq!(lines, 2);
+    }
+
+    #[test]
+    fn house_aliases_share_one_chain() {
+        let r = parse_text("NHA 0 0 1\\nNHA1 10 0 2\\nGOCNHA 10 10 3\\nNHA2 0 10 4\\nNHA 0 0 1\\n").unwrap();
+        let lines = survey_entities(&r).into_iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
+        assert_eq!(lines, 4);
+    }
+
+    #[test]
+    fn gate_breaks_house_chain() {
+        let r = parse_text("NHA 0 0 1\\nNHA1 10 0 2\\nCNHA 10 5 3\\nNHA2 10 10 4\\nNHA 0 10 5\\n").unwrap();
+        let lines = survey_entities(&r).into_iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
+        assert_eq!(lines, 2);
+    }
+
+    #[test]
     fn special_features_are_point_only_in_v1_1() {
         for code in ["CAY", "CDI", "HOGA", "CONG", "CONGTRON0,75", "CLANG", "CNHA", "LANG"] {
             let r = parse_text(&format!("{code} 10 20 30\n")).unwrap();
@@ -396,9 +437,7 @@ pub fn survey_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
         let first = chain[0];
         let last = chain[chain.len() - 1];
         if chain.len() >= 3
-            && first.x == last.x
-            && first.y == last.y
-            && first.z == last.z
+            && FeatureKind::is_explicitly_closed_chain(&chain.iter().map(|p| (*p).clone()).collect::<Vec<_>>())
         {
             // The final repeated point already produced the closing segment
             // in the windows above. No extra zero-length LINE is emitted.
