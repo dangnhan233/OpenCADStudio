@@ -49,6 +49,23 @@ impl FeatureKind {
     pub fn is_drawable_point(&self) -> bool {
         !matches!(self, Self::ProfileStation)
     }
+
+    /// Feature classes whose current V1.1 geometry is intentionally a
+    /// surveyed POINT only. We do not invent a symbol size or orientation
+    /// when the RTK record does not provide one.
+    pub fn is_point_feature(&self) -> bool {
+        matches!(
+            self,
+            Self::Point
+                | Self::Manhole
+                | Self::ElectricPole
+                | Self::Culvert
+                | Self::Tree
+                | Self::Gate
+                | Self::Grave
+                | Self::Unknown
+        )
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -254,6 +271,17 @@ mod tests {
         let entities = survey_entities(&r);
         let lines: Vec<_> = entities.iter().filter(|e| matches!(e, codec::EntityType::Line(_))).collect();
         assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn special_features_are_point_only_in_v1_1() {
+        for code in ["CAY", "CDI", "HOGA", "CONG", "CONGTRON0,75", "CLANG", "CNHA", "LANG"] {
+            let r = parse_text(&format!("{code} 10 20 30\n")).unwrap();
+            assert_eq!(r.points[0].is_point_feature(), true, "{code}");
+            let entities = survey_entities(&r);
+            assert_eq!(entities.len(), 1, "{code} must not invent geometry");
+            assert!(matches!(entities[0], codec::EntityType::Point(_)));
+        }
     }
 
 }
