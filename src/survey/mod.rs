@@ -39,9 +39,10 @@ pub fn export_dxf(records:&[SurveyExportRecord])->String {
     let mut layers=BTreeSet::new();
     for r in records { layers.insert(feature_layer_for_code(&r.code)); if r.house_number.is_some(){layers.insert("SO NHA");} }
     let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n");
-    out.push_str("0\\nSECTION\\n2\\nTABLES\\n0\\nTABLE\\n2\\nLAYER\\n70\\n");
+    out.push_str("0\\nSECTION\\n2\\nTABLES\\n");
+    out.push_str("0\\nTABLE\\n2\\nAPPID\\n70\\n1\\n0\\nAPPID\\n2\\nSURVEYCAD\\n70\\n0\\n0\\nENDTAB\\n");
+    out.push_str("0\\nTABLE\\n2\\nLAYER\\n70\\n");
     out.push_str(&format!("{}\\n",layers.len()));
-    out.push_str("0\\nTABLE\\n2\\nAPPID\\n70\\n1\\n0\\nAPPID\\n2\\nSURVEYCAD\\n70\\n0\\n");
     for layer in layers { out.push_str(&format!("0\\nLAYER\\n2\\n{}\\n70\\n0\\n62\\n7\\n6\\nCONTINUOUS\\n",dxf_escape(&layer))); }
     out.push_str("0\\nENDTAB\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nENTITIES\\n");
     for r in records {
