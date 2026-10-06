@@ -76,7 +76,6 @@ impl FeatureKind {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
 /// Configuration for provisional geometric house numbering.
 /// start_x/start_y define the beginning; dir_x/dir_y point toward increasing numbers.
 #[derive(Clone, Copy, Debug, PartialEq)]
