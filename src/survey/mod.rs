@@ -108,6 +108,23 @@ pub struct HouseFeature {
     pub centroid_z: f64,
 }
 
+/// Creates native CAD TEXT labels for numbered houses at their measured centroid.
+pub fn house_number_text_entities(import:&SurveyImport, cfg:HouseNumberingConfig)->Vec<codec::EntityType>{
+    use codec::{Entity,EntityType,Text};
+    use codec::types::Vector3;
+    let houses=house_features(import);
+    let numbers=assign_house_numbers(&houses,cfg);
+    let mut out=Vec::with_capacity(numbers.len());
+    for n in numbers {
+        if let Some(h)=houses.iter().find(|h|h.id==n.house_id) {
+            let mut text=Text::with_value(&n.number.to_string(),Vector3::new(h.centroid_x,h.centroid_y,h.centroid_z));
+            text.set_layer("SO NHA".to_string());
+            out.push(EntityType::Text(text));
+        }
+    }
+    out
+}
+
 /// Extract house chains without inventing closure. Non-house records separate houses.
 pub fn house_features(import: &SurveyImport) -> Vec<HouseFeature> {
     let mut out = Vec::new();
