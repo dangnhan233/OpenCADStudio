@@ -32,6 +32,37 @@ pub fn export_kml_file(path:impl AsRef<Path>, records:&[SurveyExportRecord])->Re
     std::fs::write(path, export_kml(records)).map_err(SurveyError::Io)
 }
 
+/// Minimal ASCII DXF R2013-compatible exporter for SurveyCAD survey records.
+/// POINT and LINE preserve the measured X/Y/Z values; TEXT carries house labels.
+pub fn export_dxf(records:&[SurveyExportRecord])->String {
+    use std::collections::BTreeSet;
+    let mut layers=BTreeSet::new();
+    for r in records { layers.insert(feature_layer_for_code(&r.code)); if r.house_number.is_some(){layers.insert("SO NHA");} }
+    let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n");
+    out.push_str("0\\nSECTION\\n2\\nTABLES\\n0\\nTABLE\\n2\\nLAYER\\n70\\n");
+    out.push_str(&format!("{}\\n",layers.len()));
+    for layer in layers { out.push_str(&format!("0\\nLAYER\\n2\\n{}\\n70\\n0\\n62\\n7\\n6\\nCONTINUOUS\\n",dxf_escape(&layer))); }
+    out.push_str("0\\nENDTAB\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nENTITIES\\n");
+    for r in records {
+        let layer=feature_layer_for_code(&r.code);
+        out.push_str(&format!("0\\nPOINT\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n",dxf_escape(&layer),r.x,r.y,r.z));
+        if let Some(n)=r.house_number {
+            out.push_str(&format!("0\\nTEXT\\n8\\nSO NHA\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n40\\n1.0\\n1\\n{}\\n",r.x,r.y,r.z,n));
+        }
+    }
+    out.push_str("0\\nENDSEC\\n0\\nEOF\\n"); out
+}
+
+fn dxf_escape(s:&str)->String { s.replace('\\n'," ").replace('\\r'," ") }
+
+fn feature_layer_for_code(code:&str)->String {
+    classify_code(code).layer().to_string()
+}
+
+pub fn export_dxf_file(path:impl AsRef<Path>, records:&[SurveyExportRecord])->Result<(),SurveyError>{
+    std::fs::write(path, export_dxf(records)).map_err(SurveyError::Io)
+}
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurveyPoint {
