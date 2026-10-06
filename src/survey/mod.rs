@@ -147,12 +147,32 @@ fn fields(line: &str) -> Vec<&str> {
 }
 
 fn parse_record(p: &[&str], line: usize) -> Result<(f64,f64,f64,&str),SurveyError> {
-    if p.len() < 4 { return Err(SurveyError::InvalidRecord{line,text:p.join(" ")}); }
-    if let (Ok(x),Ok(y),Ok(z))=(p[1].parse(),p[2].parse(),p[3].parse()) { return Ok((x,y,z,p[0])); }
-    if p.len() >= 5 {
-        if let (Ok(x),Ok(y),Ok(z))=(p[1].parse(),p[2].parse(),p[3].parse()) { return Ok((x,y,z,p[4])); }
+    if p.len() < 4 {
+        return Err(SurveyError::InvalidRecord { line, text: p.join(" ") });
     }
-    Err(SurveyError::InvalidRecord{line,text:p.join(" ")})
+
+    // CODE X Y Z
+    if let (Ok(x), Ok(y), Ok(z)) = (p[1].parse(), p[2].parse(), p[3].parse()) {
+        return Ok((x, y, z, p[0]));
+    }
+
+    // STT X Y Z CODE
+    if p.len() >= 5
+        && p[0].parse::<usize>().is_ok()
+        && let (Ok(x), Ok(y), Ok(z)) = (p[1].parse(), p[2].parse(), p[3].parse())
+    {
+        return Ok((x, y, z, p[4]));
+    }
+
+    // STT CODE X Y Z
+    if p.len() >= 5
+        && p[0].parse::<usize>().is_ok()
+        && let (Ok(x), Ok(y), Ok(z)) = (p[2].parse(), p[3].parse(), p[4].parse())
+    {
+        return Ok((x, y, z, p[1]));
+    }
+
+    Err(SurveyError::InvalidRecord { line, text: p.join(" ") })
 }
 
 pub fn parse_text(text: &str) -> Result<SurveyImport,SurveyError> {
@@ -222,16 +242,66 @@ impl crate::command::CadCommand for SurveyImportCommand {
     }
 }
 
-/// Convert survey points into native CAD POINT entities. Profile stations are
-/// deliberately omitted; all other records remain drawable even when their
-/// feature code is UNKNOWN, so importing never silently changes coordinates or
-/// invents a feature meaning.
-pub fn point_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
-    import.points.iter()
-        .filter(|p| p.feature.is_drawable_point())
-        .map(|p| codec::EntityType::Point(codec::Point {
-            location: codec::types::Vector3::new(p.x, p.y, p.z),
+/// Feature-specific native CAD geometry.
+///
+/// Point features become POINT entities. Linear survey codes become individual
+/// LINE entities between consecutive records of the same feature. Using LINE
+/// rather than a 2D LWPOLYLINE is intentional: every segment keeps both
+/// endpoints' original Z values. Profile stations are never emitted and
+/// UNKNOWN codes are never reinterpreted.
+pub fn survey_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
+    use codec::{Entity, EntityType, Line};
+    use codec::types::Vector3;
+
+    const LINE_FEATURES: &[FeatureKind] = &[
+        FeatureKind::RoadEdge,
+        FeatureKind::Road,
+        FeatureKind::ConcreteRoad,
+        FeatureKind::Ditch,
+        FeatureKind::Wall,
+        FeatureKind::Fence,
+        FeatureKind::House,
+        FeatureKind::Slope,
+        FeatureKind::Field,
+        FeatureKind::Bank,
+        FeatureKind::FlowerBed,
+    ];
+
+    let mut out = Vec::new();
+
+    for p in import.points.iter().filter(|p| p.feature.is_drawable_point()) {
+        let mut point = codec::Point {
+            location: Vector3::new(p.x, p.y, p.z),
             ..Default::default()
-        }))
+        };
+        point.common.layer = p.feature.layer().to_string();
+        out.push(EntityType::Point(point));
+    }
+
+    let mut previous: Option<&SurveyPoint> = None;
+    for p in import.points.iter().filter(|p| p.feature.is_drawable_point()) {
+        let connect = previous
+            .is_some_and(|q| q.feature == p.feature && LINE_FEATURES.contains(&p.feature));
+        if connect {
+            let q = previous.unwrap();
+            let mut line = Line::from_points(
+                Vector3::new(q.x, q.y, q.z),
+                Vector3::new(p.x, p.y, p.z),
+            );
+            line.set_layer(p.feature.layer().to_string());
+            out.push(EntityType::Line(line));
+        }
+        previous = Some(p);
+    }
+
+    out
+}
+
+/// Backward-compatible point-only helper retained for callers that only need
+/// survey points. Profile stations remain excluded.
+pub fn point_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
+    survey_entities(import)
+        .into_iter()
+        .filter(|e| matches!(e, codec::EntityType::Point(_)))
         .collect()
 }
