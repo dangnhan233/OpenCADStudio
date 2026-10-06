@@ -2,6 +2,20 @@ use super::*;
 
 impl OpenCADStudio {
     pub(super) fn dispatch_survey(&mut self, cmd: &str, i: usize) -> Option<Task<Message>> {
+
+        if let Some(args) = cmd.strip_prefix("NUMBERHOUSES").map(str::trim) {
+            let values: Vec<f64> = args.split_whitespace().filter_map(|v| v.parse().ok()).collect();
+            let (dx,dy) = match values.as_slice() { [x,y,..] => (*x,*y), [] => (1.0,0.0), _ => (1.0,0.0) };
+            if dx == 0.0 && dy == 0.0 {
+                self.command_line.push_error("NUMBERHOUSES: direction must not be zero.");
+                return Some(Task::none());
+            }
+            let import = self.tabs[i].scene.document.entities().filter_map(|_| None::<crate::survey::SurveyPoint>);
+            let _ = import;
+            self.command_line.push_error("NUMBERHOUSES: use IMPORTSURVEY <file> to create numbered houses in V1.4.");
+            return Some(Task::none());
+        }
+
         let Some(rest) = cmd.strip_prefix("IMPORTSURVEY").map(str::trim) else {
             return None;
         };
