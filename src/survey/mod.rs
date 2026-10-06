@@ -547,6 +547,8 @@ mod tests {
         assert!(dxf.contains("0\\nTEXT\\n8\\nSO NHA"));
         assert!(dxf.contains("1\\n1\\n"));
         assert!(dxf.contains("0\\nEOF\\n"));
+        assert!(dxf.contains("2\\nAPPID\\n70\\n1\\n0\\nAPPID\\n2\\nSURVEYCAD"));
+        assert!(dxf.contains("1001\\nSURVEYCAD\\n1000\\nNHA\\n1071\\n1"));
     }
 
 }
