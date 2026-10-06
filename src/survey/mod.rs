@@ -317,6 +317,12 @@ pub fn parse_file(path: impl AsRef<Path>) -> Result<SurveyImport,SurveyError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn kml_export_preserves_code_house_number_and_xyz() {
+        let k=export_kml(&[SurveyExportRecord{x:1.25,y:2.5,z:3.75,code:"NHA".into(),house_number:Some(7)}]);
+        assert!(k.contains("CODE")); assert!(k.contains("NHA")); assert!(k.contains("HOUSE_NUMBER")); assert!(k.contains("7"));
+        assert!(k.contains("1.250000000000000,2.500000000000000,3.750000000000000"));
+    }
     #[test] fn coordinates_are_unchanged() {
         let r=parse_text("mdn 184000.123456 609000.654321 12.345\n").unwrap();
         let p=&r.points[0]; assert_eq!((p.x,p.y,p.z),(184000.123456,609000.654321,12.345));
