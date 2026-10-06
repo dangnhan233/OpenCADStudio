@@ -32,3 +32,4 @@ pub mod sys;
 pub mod sysinfo;
 pub mod ui;
 pub mod videos;
+pub mod survey;
