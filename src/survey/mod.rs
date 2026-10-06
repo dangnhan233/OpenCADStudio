@@ -236,6 +236,26 @@ mod tests {
         assert_eq!(line.end, codec::types::Vector3::new(4.25, 5.5, 6.75));
     }
 
+    #[test]
+    fn profile_station_breaks_a_linear_chain() {
+        let r = parse_text(
+            "MDN 0 0 1\nMDN 10 0 2\n1 20 0 3\nMDN 30 0 4\nMDN 40 0 5\n"
+        ).unwrap();
+        let entities = survey_entities(&r);
+        let lines: Vec<_> = entities.iter().filter(|e| matches!(e, codec::EntityType::Line(_))).collect();
+        assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn unknown_code_breaks_a_linear_chain() {
+        let r = parse_text(
+            "MDN 0 0 1\nMDN 10 0 2\nZZZ 20 0 3\nMDN 30 0 4\nMDN 40 0 5\n"
+        ).unwrap();
+        let entities = survey_entities(&r);
+        let lines: Vec<_> = entities.iter().filter(|e| matches!(e, codec::EntityType::Line(_))).collect();
+        assert_eq!(lines.len(), 2);
+    }
+
 }
 
 /// Interactive front-end for the IMPORTSURVEY command.
@@ -294,17 +314,17 @@ pub fn survey_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
         FeatureKind::FlowerBed,
     ];
 
-    let drawable: Vec<&SurveyPoint> = import
+    let drawable_count = import
         .points
         .iter()
         .filter(|p| p.feature.is_drawable_point())
-        .collect();
+        .count();
 
-    let mut out = Vec::with_capacity(drawable.len() * 2);
+    let mut out = Vec::with_capacity(drawable_count * 2);
 
-    // Always emit the measured point itself. This preserves the survey point
-    // inventory even when a feature also produces connecting geometry.
-    for p in &drawable {
+    // Always emit the measured point itself. Profile stations are deliberately
+    // not emitted. Non-drawable records are also chain boundaries below.
+    for p in import.points.iter().filter(|p| p.feature.is_drawable_point()) {
         let mut point = codec::Point {
             location: Vector3::new(p.x, p.y, p.z),
             ..Default::default()
@@ -359,7 +379,15 @@ pub fn survey_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
         chain.clear();
     };
 
-    for p in drawable {
+    for p in &import.points {
+        // Every non-drawable record is a hard boundary. In particular, a
+        // PROFILE_STATION between two MDN records must not disappear and
+        // accidentally cause those two survey strings to be joined.
+        if !p.feature.is_drawable_point() {
+            flush(&mut chain, &mut out);
+            continue;
+        }
+
         let same_chain = chain.last().is_some_and(|q| {
             q.feature == p.feature && q.normalized_code == p.normalized_code
         });
