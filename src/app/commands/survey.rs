@@ -32,7 +32,8 @@ impl OpenCADStudio {
                     Some(Task::none())
                 }
             }
-        } else
+        }
+
         let Some(rest) = cmd.strip_prefix("IMPORTSURVEY").map(str::trim) else {
             return None;
         };
@@ -98,5 +99,5 @@ impl OpenCADStudio {
 }
 
 inventory::submit!(crate::command::CommandRegistration {
-    names: &["IMPORTSURVEY", "SURVEYIMPORT"]
+    names: &["IMPORTSURVEY", "SURVEYIMPORT", "NUMBERHOUSES"]
 });
