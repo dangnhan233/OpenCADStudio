@@ -34,6 +34,36 @@ impl OpenCADStudio {
             }
         }
 
+        if let Some(rest) = cmd.strip_prefix("EXPORTKML").map(str::trim) {
+            let parts: Vec<&str> = rest.split_whitespace().collect();
+            if parts.is_empty() {
+                self.command_line.push_error("EXPORTKML: specify survey TXT/CSV input and KML output path.");
+                return Some(Task::none());
+            }
+            let input = std::path::PathBuf::from(parts[0].trim_matches('"'));
+            let output = parts.get(1).map(|v| std::path::PathBuf::from(v.trim_matches('"')))
+                .unwrap_or_else(|| input.with_extension("kml"));
+            match crate::survey::parse_file(&input) {
+                Ok(import) => {
+                    let houses = crate::survey::house_features(&import);
+                    let numbers = crate::survey::assign_house_numbers(&houses, crate::survey::HouseNumberingConfig {
+                        start_x: 0.0, start_y: 0.0, dir_x: 1.0, dir_y: 0.0,
+                    });
+                    let mut house_by_point = std::collections::BTreeMap::new();
+                    for n in numbers { if let Some(h)=houses.iter().find(|h| h.id==n.house_id) { for id in &h.point_ids { house_by_point.insert(*id,n.number); } } }
+                    let records = import.points.iter().filter(|p| p.feature != crate::survey::FeatureKind::ProfileStation).map(|p| crate::survey::SurveyExportRecord {
+                        x:p.x, y:p.y, z:p.z, code:p.code.clone(), house_number:house_by_point.get(&p.id).copied(),
+                    }).collect::<Vec<_>>();
+                    match crate::survey::export_kml_file(&output, &records) {
+                        Ok(()) => { self.command_line.push_output(crate::tf!("EXPORTKML: wrote {} record(s) to {}.", records.len(), output.display()).as_ref()); }
+                        Err(e) => { self.command_line.push_error(crate::tf!("EXPORTKML: {e}").as_ref()); }
+                    }
+                }
+                Err(e) => self.command_line.push_error(crate::tf!("EXPORTKML: {e}").as_ref()),
+            }
+            return Some(Task::none());
+        }
+
         let Some(rest) = cmd.strip_prefix("IMPORTSURVEY").map(str::trim) else {
             return None;
         };
@@ -99,5 +129,5 @@ impl OpenCADStudio {
 }
 
 inventory::submit!(crate::command::CommandRegistration {
-    names: &["IMPORTSURVEY", "SURVEYIMPORT", "NUMBERHOUSES"]
+    names: &["IMPORTSURVEY", "SURVEYIMPORT", "NUMBERHOUSES", "EXPORTKML"]
 });
