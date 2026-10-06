@@ -4,18 +4,35 @@ impl OpenCADStudio {
     pub(super) fn dispatch_survey(&mut self, cmd: &str, i: usize) -> Option<Task<Message>> {
 
         if let Some(args) = cmd.strip_prefix("NUMBERHOUSES").map(str::trim) {
-            let values: Vec<f64> = args.split_whitespace().filter_map(|v| v.parse().ok()).collect();
-            let (dx,dy) = match values.as_slice() { [x,y,..] => (*x,*y), [] => (1.0,0.0), _ => (1.0,0.0) };
+            let parts: Vec<&str> = args.split_whitespace().collect();
+            if parts.is_empty() {
+                self.command_line.push_error("NUMBERHOUSES: specify survey TXT/CSV path and optional direction DX DY.");
+                return Some(Task::none());
+            }
+            let path = std::path::PathBuf::from(parts[0].trim_matches('"'));
+            let dx = parts.get(1).and_then(|v| v.parse::<f64>().ok()).unwrap_or(1.0);
+            let dy = parts.get(2).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
             if dx == 0.0 && dy == 0.0 {
                 self.command_line.push_error("NUMBERHOUSES: direction must not be zero.");
                 return Some(Task::none());
             }
-            let import = self.tabs[i].scene.document.entities().filter_map(|_| None::<crate::survey::SurveyPoint>);
-            let _ = import;
-            self.command_line.push_error("NUMBERHOUSES: use IMPORTSURVEY <file> to create numbered houses in V1.4.");
-            return Some(Task::none());
-        }
-
+            match crate::survey::parse_file(&path) {
+                Ok(import) => {
+                    if !self.tabs[i].scene.document.layers.contains("SO NHA") {
+                        let _ = self.tabs[i].scene.document.layers.add(codec::Layer::new("SO NHA"));
+                    }
+                    let entities = crate::survey::house_number_text_entities(&import, crate::survey::HouseNumberingConfig {
+                        start_x: 0.0, start_y: 0.0, dir_x: dx, dir_y: dy,
+                    });
+                    self.command_line.push_output(crate::tf!("NUMBERHOUSES: {} house label(s) ready.", entities.len()).as_ref());
+                    Some(self.apply_cmd_result(crate::command::CmdResult::CommitEntitiesAndExit(entities)))
+                }
+                Err(e) => {
+                    self.command_line.push_error(crate::tf!("NUMBERHOUSES: {e}").as_ref());
+                    Some(Task::none())
+                }
+            }
+        } else
         let Some(rest) = cmd.strip_prefix("IMPORTSURVEY").map(str::trim) else {
             return None;
         };
