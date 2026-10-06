@@ -71,7 +71,7 @@ pub fn export_dxf_survey(import:&SurveyImport, cfg:HouseNumberingConfig)->String
     let numbers=assign_house_numbers(&houses,cfg);
     let mut house_by_point=BTreeMap::new();
     for n in numbers { if let Some(h)=houses.iter().find(|h|h.id==n.house_id) { for id in &h.point_ids { house_by_point.insert(*id,n.number); } } }
-    let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nTABLES\\n0\\nTABLE\\n2\\nLAYER\\n70\\n17\\n");
+    let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nTABLES\\n0\\nTABLE\\n2\\nLAYER\\n70\\n16\\n");
     for layer in ["TRAC DIEM","GIAO THONG","THUY HE","TUONG RAO","NHA DAN","CONG TRINH","DIEN","DIA HINH","CONG","CAY","MO","RUONG","CANH QUAN","UNKNOWN","TRAC DOC","SO NHA"] {
         out.push_str(&format!("0\\nLAYER\\n2\\n{}\\n70\\n0\\n62\\n7\\n6\\nCONTINUOUS\\n",layer));
     }
@@ -685,3 +685,15 @@ pub fn point_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
         .filter(|e| matches!(e, codec::EntityType::Point(_)))
         .collect()
 }
+
+    #[test]
+    fn dxf_export_preserves_xyz_layers_lines_and_house_text() {
+        let input = parse_text("1,100,200,10\\nNHA,0,0,1\\nNHA,10,0,2\\nNHA,10,10,3\\nNHA,0,0,1\\n").unwrap();
+        let dxf = export_dxf_survey(&input, HouseNumberingConfig { start_x:0.0,start_y:0.0,dir_x:1.0,dir_y:0.0 });
+        assert!(dxf.contains("0\\nPOINT\\n8\\nNHA DAN\\n10\\n0.000000000000000\\n20\\n0.000000000000000\\n30\\n1.000000000000000"));
+        assert!(dxf.contains("0\\nLINE\\n8\\nNHA DAN\\n10\\n0.000000000000000\\n20\\n0.000000000000000\\n30\\n1.000000000000000\\n11\\n10.000000000000000\\n21\\n0.000000000000000\\n31\\n2.000000000000000"));
+        assert!(dxf.contains("0\\nTEXT\\n8\\nSO NHA"));
+        assert!(dxf.contains("1\\n1\\n"));
+        assert!(dxf.contains("0\\nEOF\\n"));
+    }
+
