@@ -193,3 +193,45 @@ mod tests {
         assert_eq!(classify_code("ZZZ"),FeatureKind::Unknown);
     }
 }
+
+/// Interactive front-end for the IMPORTSURVEY command.
+///
+/// The command line owns the file path prompt; actual parsing is delegated to
+/// the same parser used by direct IMPORTSURVEY <path>, so GUI and scripted
+/// imports cannot diverge.
+pub struct SurveyImportCommand;
+impl SurveyImportCommand {
+    pub fn new() -> Self { Self }
+}
+impl crate::command::CadCommand for SurveyImportCommand {
+    fn name(&self) -> &'static str { "IMPORTSURVEY" }
+    fn prompt(&self) -> String {
+        "IMPORTSURVEY  Specify TXT/CSV file path:".to_string()
+    }
+    fn wants_text_input(&self) -> bool { true }
+    fn on_text_input(&mut self, text: &str) -> Option<crate::command::CmdResult> {
+        let path = text.trim();
+        if path.is_empty() { return Some(crate::command::CmdResult::NeedPoint); }
+        Some(crate::command::CmdResult::Dispatch(format!("IMPORTSURVEY {path}")))
+    }
+    fn on_enter(&mut self) -> crate::command::CmdResult {
+        crate::command::CmdResult::NeedPoint
+    }
+    fn on_escape(&mut self) -> crate::command::CmdResult {
+        crate::command::CmdResult::Cancel
+    }
+}
+
+/// Convert survey points into native CAD POINT entities. Profile stations are
+/// deliberately omitted; all other records remain drawable even when their
+/// feature code is UNKNOWN, so importing never silently changes coordinates or
+/// invents a feature meaning.
+pub fn point_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
+    import.points.iter()
+        .filter(|p| p.feature.is_drawable_point())
+        .map(|p| codec::EntityType::Point(codec::Point {
+            location: codec::types::Vector3::new(p.x, p.y, p.z),
+            ..Default::default()
+        }))
+        .collect()
+}
