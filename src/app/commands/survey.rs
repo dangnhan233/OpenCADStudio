@@ -20,7 +20,7 @@ impl OpenCADStudio {
                 let profile = import.points.iter()
                     .filter(|p| p.feature == crate::survey::FeatureKind::ProfileStation)
                     .count();
-                let entities = crate::survey::point_entities(&import);
+                let entities = crate::survey::survey_entities(&import);
                 let drawable = entities.len();
                 if drawable == 0 {
                     self.command_line.push_info(
@@ -36,9 +36,21 @@ impl OpenCADStudio {
                     }
                     return Some(Task::none());
                 }
+                // Create missing SurveyCAD layers without replacing any
+                // existing layer definition or user display settings.
+                for name in [
+                    "TRAC DIEM", "GIAO THONG", "THUY HE", "TUONG RAO", "NHA DAN",
+                    "CONG TRINH", "DIEN", "DIA HINH", "CONG", "CAY", "MO", "RUONG",
+                    "CANH QUAN", "UNKNOWN",
+                ] {
+                    if !self.tabs[i].scene.document.layers.contains(name) {
+                        let _ = self.tabs[i].scene.document.layers.add(codec::Layer::new(name));
+                    }
+                }
+
                 self.command_line.push_output(
                     crate::tf!(
-                        "IMPORTSURVEY: {} point(s) ready; {} profile station(s) skipped; {} unknown code(s).",
+                        "IMPORTSURVEY: {} native entity(s) ready; {} profile station(s) skipped; {} unknown code(s).",
                         drawable, profile, unknown
                     ).as_ref()
                 );
