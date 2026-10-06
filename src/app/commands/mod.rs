@@ -11,6 +11,7 @@ mod blocks;
 mod xref_attach;
 mod dim;
 pub(crate) mod display;
+mod survey;
 mod draw;
 mod fileops;
 mod inquiry;
@@ -330,6 +331,9 @@ impl OpenCADStudio {
             return Some(t);
         }
         if let Some(t) = self.dispatch_count(cmd, i) {
+            return Some(t);
+        }
+        if let Some(t) = self.dispatch_survey(cmd, i) {
             return Some(t);
         }
         if let Some(t) = self.dispatch_draw(cmd, i) {
