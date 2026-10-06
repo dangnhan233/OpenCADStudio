@@ -41,6 +41,7 @@ pub fn export_dxf(records:&[SurveyExportRecord])->String {
     let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n");
     out.push_str("0\\nSECTION\\n2\\nTABLES\\n0\\nTABLE\\n2\\nLAYER\\n70\\n");
     out.push_str(&format!("{}\\n",layers.len()));
+    out.push_str("0\\nTABLE\\n2\\nAPPID\\n70\\n1\\n0\\nAPPID\\n2\\nSURVEYCAD\\n70\\n0\\n");
     for layer in layers { out.push_str(&format!("0\\nLAYER\\n2\\n{}\\n70\\n0\\n62\\n7\\n6\\nCONTINUOUS\\n",dxf_escape(&layer))); }
     out.push_str("0\\nENDTAB\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nENTITIES\\n");
     for r in records {
@@ -79,7 +80,7 @@ pub fn export_dxf_survey(import:&SurveyImport, cfg:HouseNumberingConfig)->String
     let numbers=assign_house_numbers(&houses,cfg);
     let mut house_by_point=BTreeMap::new();
     for n in numbers { if let Some(h)=houses.iter().find(|h|h.id==n.house_id) { for id in &h.point_ids { house_by_point.insert(*id,n.number); } } }
-    let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nTABLES\\n0\\nTABLE\\n2\\nLAYER\\n70\\n16\\n");
+    let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nTABLES\\n0\\nTABLE\\n2\\nAPPID\\n70\\n1\\n0\\nAPPID\\n2\\nSURVEYCAD\\n70\\n0\\n0\\nENDTAB\\n0\\nTABLE\\n2\\nLAYER\\n70\\n16\\n");
     for layer in ["TRAC DIEM","GIAO THONG","THUY HE","TUONG RAO","NHA DAN","CONG TRINH","DIEN","DIA HINH","CONG","CAY","MO","RUONG","CANH QUAN","UNKNOWN","TRAC DOC","SO NHA"] {
         out.push_str(&format!("0\\nLAYER\\n2\\n{}\\n70\\n0\\n62\\n7\\n6\\nCONTINUOUS\\n",layer));
     }
