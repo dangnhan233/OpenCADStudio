@@ -528,6 +528,16 @@ mod tests {
             assert!(matches!(entities[0], codec::EntityType::Point(_)));
         }
     }
+    #[test]
+    fn dxf_export_preserves_xyz_layers_lines_and_house_text() {
+        let input = parse_text("1,100,200,10\\nNHA,0,0,1\\nNHA,10,0,2\\nNHA,10,10,3\\nNHA,0,0,1\\n").unwrap();
+        let dxf = export_dxf_survey(&input, HouseNumberingConfig { start_x:0.0,start_y:0.0,dir_x:1.0,dir_y:0.0 });
+        assert!(dxf.contains("0\\nPOINT\\n8\\nNHA DAN\\n10\\n0.000000000000000\\n20\\n0.000000000000000\\n30\\n1.000000000000000"));
+        assert!(dxf.contains("0\\nLINE\\n8\\nNHA DAN\\n10\\n0.000000000000000\\n20\\n0.000000000000000\\n30\\n1.000000000000000\\n11\\n10.000000000000000\\n21\\n0.000000000000000\\n31\\n2.000000000000000"));
+        assert!(dxf.contains("0\\nTEXT\\n8\\nSO NHA"));
+        assert!(dxf.contains("1\\n1\\n"));
+        assert!(dxf.contains("0\\nEOF\\n"));
+    }
 
 }
 
@@ -686,14 +696,4 @@ pub fn point_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
         .collect()
 }
 
-    #[test]
-    fn dxf_export_preserves_xyz_layers_lines_and_house_text() {
-        let input = parse_text("1,100,200,10\\nNHA,0,0,1\\nNHA,10,0,2\\nNHA,10,10,3\\nNHA,0,0,1\\n").unwrap();
-        let dxf = export_dxf_survey(&input, HouseNumberingConfig { start_x:0.0,start_y:0.0,dir_x:1.0,dir_y:0.0 });
-        assert!(dxf.contains("0\\nPOINT\\n8\\nNHA DAN\\n10\\n0.000000000000000\\n20\\n0.000000000000000\\n30\\n1.000000000000000"));
-        assert!(dxf.contains("0\\nLINE\\n8\\nNHA DAN\\n10\\n0.000000000000000\\n20\\n0.000000000000000\\n30\\n1.000000000000000\\n11\\n10.000000000000000\\n21\\n0.000000000000000\\n31\\n2.000000000000000"));
-        assert!(dxf.contains("0\\nTEXT\\n8\\nSO NHA"));
-        assert!(dxf.contains("1\\n1\\n"));
-        assert!(dxf.contains("0\\nEOF\\n"));
-    }
 
