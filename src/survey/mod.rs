@@ -66,8 +66,6 @@ impl FeatureKind {
                 | Self::Unknown
         )
     }
-}
-
     /// Returns true only when the measured chain explicitly repeats its
     /// first XYZ coordinate at the end. House geometry never auto-closes.
     pub fn is_explicitly_closed_chain(points: &[SurveyPoint]) -> bool {
@@ -76,6 +74,7 @@ impl FeatureKind {
         let last = &points[points.len() - 1];
         first.x == last.x && first.y == last.y && first.z == last.z
     }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurveyImport {
