@@ -63,6 +63,50 @@ pub fn export_dxf_file(path:impl AsRef<Path>, records:&[SurveyExportRecord])->Re
     std::fs::write(path, export_dxf(records)).map_err(SurveyError::Io)
 }
 
+/// Exports the native SurveyCAD geometry: measured POINTs, chain LINEs, and house-number TEXT.
+pub fn export_dxf_survey(import:&SurveyImport, cfg:HouseNumberingConfig)->String {
+    let mut records=Vec::new();
+    for p in import.drawable_points() { records.push(SurveyExportRecord{x:p.x,y:p.y,z:p.z,code:p.code.clone(),house_number:None}); }
+    let houses=house_features(import);
+    let numbers=assign_house_numbers(&houses,cfg);
+    let mut house_by_point=BTreeMap::new();
+    for n in numbers { if let Some(h)=houses.iter().find(|h|h.id==n.house_id) { for id in &h.point_ids { house_by_point.insert(*id,n.number); } } }
+    let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nTABLES\\n0\\nTABLE\\n2\\nLAYER\\n70\\n17\\n");
+    for layer in ["TRAC DIEM","GIAO THONG","THUY HE","TUONG RAO","NHA DAN","CONG TRINH","DIEN","DIA HINH","CONG","CAY","MO","RUONG","CANH QUAN","UNKNOWN","TRAC DOC","SO NHA"] {
+        out.push_str(&format!("0\\nLAYER\\n2\\n{}\\n70\\n0\\n62\\n7\\n6\\nCONTINUOUS\\n",layer));
+    }
+    out.push_str("0\\nENDTAB\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nENTITIES\\n");
+    for p in import.drawable_points() {
+        let layer=p.feature.layer();
+        out.push_str(&format!("0\\nPOINT\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n",layer,p.x,p.y,p.z));
+    }
+    let mut chain:Vec<&SurveyPoint>=Vec::new();
+    let flush=|chain:&mut Vec<&SurveyPoint>,out:&mut String| {
+        for pair in chain.windows(2) {
+            let a=pair[0]; let b=pair[1];
+            out.push_str(&format!("0\\nLINE\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n11\\n{:.15}\\n21\\n{:.15}\\n31\\n{:.15}\\n",a.feature.layer(),a.x,a.y,a.z,b.x,b.y,b.z));
+        }
+        chain.clear();
+    };
+    for p in &import.points {
+        if p.feature.is_drawable_point() && !p.feature.is_point_feature() {
+            if chain.last().is_some_and(|q| q.feature==p.feature && q.normalized_code==p.normalized_code) { chain.push(p); }
+            else { flush(&mut chain,&mut out); chain.push(p); }
+        } else { flush(&mut chain,&mut out); }
+    }
+    flush(&mut chain,&mut out);
+    for h in houses {
+        if let Some(n)=house_by_point.get(&h.point_ids[0]).copied() {
+            out.push_str(&format!("0\\nTEXT\\n8\\nSO NHA\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n40\\n1.0\\n1\\n{}\\n",h.centroid_x,h.centroid_y,h.centroid_z,n));
+        }
+    }
+    out.push_str("0\\nENDSEC\\n0\\nEOF\\n"); out
+}
+
+pub fn export_dxf_survey_file(path:impl AsRef<Path>, import:&SurveyImport, cfg:HouseNumberingConfig)->Result<(),SurveyError>{
+    std::fs::write(path, export_dxf_survey(import,cfg)).map_err(SurveyError::Io)
+}
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurveyPoint {
