@@ -77,6 +77,27 @@ impl FeatureKind {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// Configuration for provisional geometric house numbering.
+/// start_x/start_y define the beginning; dir_x/dir_y point toward increasing numbers.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HouseNumberingConfig { pub start_x:f64, pub start_y:f64, pub dir_x:f64, pub dir_y:f64 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NumberedHouse { pub house_id:usize, pub number:usize }
+
+/// Assign odd numbers to the left side and even numbers to the right side
+/// of the configured direction, ordered by projection along that direction.
+pub fn assign_house_numbers(houses:&[HouseFeature], cfg:HouseNumberingConfig)->Vec<NumberedHouse>{
+    let len=(cfg.dir_x*cfg.dir_x+cfg.dir_y*cfg.dir_y).sqrt();
+    if len==0.0 || !len.is_finite(){return Vec::new();}
+    let ux=cfg.dir_x/len; let uy=cfg.dir_y/len;
+    let mut rows:Vec<(f64,f64,usize)>=houses.iter().map(|h|{let dx=h.centroid_x-cfg.start_x;let dy=h.centroid_y-cfg.start_y;(dx*ux+dy*uy,dx*(-uy)+dy*ux,h.id)}).collect();
+    rows.sort_by(|a,b|a.0.total_cmp(&b.0).then_with(||a.1.total_cmp(&b.1)).then_with(||a.2.cmp(&b.2)));
+    let mut left=1usize; let mut right=2usize; let mut out=Vec::with_capacity(rows.len());
+    for (_,side,id) in rows { if side>=0.0 {out.push(NumberedHouse{house_id:id,number:left});left+=2;} else {out.push(NumberedHouse{house_id:id,number:right});right+=2;} }
+    out.sort_by_key(|x|x.house_id); out
+}
+
 /// Stable identity and centroid used by SurveyCAD house numbering/export.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HouseFeature {
@@ -361,6 +382,17 @@ mod tests {
         assert!(h[1].closed);
         assert_eq!(h[1].point_ids, vec![5,6,7,8]);
         assert_eq!((h[1].centroid_x, h[1].centroid_y), (25.0, 5.0));
+    }
+
+    #[test]
+    fn house_numbering_is_deterministic_by_direction_and_side() {
+        let houses=vec![
+            HouseFeature{id:1,point_ids:vec![],closed:true,centroid_x:10.0,centroid_y:1.0,centroid_z:0.0},
+            HouseFeature{id:2,point_ids:vec![],closed:true,centroid_x:20.0,centroid_y:-1.0,centroid_z:0.0},
+            HouseFeature{id:3,point_ids:vec![],closed:true,centroid_x:30.0,centroid_y:1.0,centroid_z:0.0},
+        ];
+        let n=assign_house_numbers(&houses,HouseNumberingConfig{start_x:0.0,start_y:0.0,dir_x:1.0,dir_y:0.0});
+        assert_eq!(n,vec![NumberedHouse{house_id:1,number:1},NumberedHouse{house_id:2,number:2},NumberedHouse{house_id:3,number:3}]);
     }
 
     #[test]
