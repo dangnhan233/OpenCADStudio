@@ -16,7 +16,7 @@ pub struct SurveyExportRecord {
 /// when source X/Y are projected survey coordinates.
 pub fn export_kml(records:&[SurveyExportRecord])->String {
     fn esc(s:&str)->String {
-        s.replace('&',"&amp;").replace('<',"&lt;").replace('>',"&gt;").replace('"',"&quot;").replace('\\'',"&apos;")
+        s.replace('&',"&amp;").replace('<',"&lt;").replace('>',"&gt;").replace('"',"&quot;").replace("'","&apos;")
     }
     let mut kml=String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document>\n");
     for r in records {
