@@ -243,11 +243,13 @@ pub fn house_features(import: &SurveyImport) -> Vec<HouseFeature> {
     let mut next_id = 1usize;
     let flush = |chain: &mut Vec<&SurveyPoint>, out: &mut Vec<HouseFeature>, next_id: &mut usize| {
         if chain.len() < 2 { chain.clear(); return; }
-        let n = chain.len() as f64;
-        let cx = chain.iter().map(|p| p.x).sum::<f64>() / n;
-        let cy = chain.iter().map(|p| p.y).sum::<f64>() / n;
-        let cz = chain.iter().map(|p| p.z).sum::<f64>() / n;
         let closed = FeatureKind::is_explicitly_closed_chain(&chain.iter().map(|p| (*p).clone()).collect::<Vec<_>>());
+        // The repeated closing observation confirms closure but must not bias the centroid.
+        let vertices = if closed { &chain[..chain.len() - 1] } else { &chain[..] };
+        let n = vertices.len() as f64;
+        let cx = vertices.iter().map(|p| p.x).sum::<f64>() / n;
+        let cy = vertices.iter().map(|p| p.y).sum::<f64>() / n;
+        let cz = vertices.iter().map(|p| p.z).sum::<f64>() / n;
         out.push(HouseFeature { id:*next_id, point_ids:chain.iter().map(|p| p.id).collect(), closed, centroid_x:cx, centroid_y:cy, centroid_z:cz });
         *next_id += 1;
         chain.clear();
@@ -351,9 +353,21 @@ pub fn canonical_code(code: &str) -> String {
 }
 
 fn fields(line: &str) -> Vec<&str> {
-    if line.contains(',') { line.split(',').map(str::trim).filter(|s|!s.is_empty()).collect() }
-    else if line.contains(';') { line.split(';').map(str::trim).filter(|s|!s.is_empty()).collect() }
-    else { line.split_whitespace().collect() }
+    let whitespace_fields: Vec<&str> = line.split_whitespace().collect();
+    // Preserve decimal-comma feature codes such as CONGTRON0,75 in whitespace rows.
+    let has_three_numeric_tail = whitespace_fields.len() >= 4
+        && whitespace_fields[whitespace_fields.len() - 3].parse::<f64>().is_ok()
+        && whitespace_fields[whitespace_fields.len() - 2].parse::<f64>().is_ok()
+        && whitespace_fields[whitespace_fields.len() - 1].parse::<f64>().is_ok();
+    if line.contains(char::is_whitespace) && has_three_numeric_tail && !line.contains(';') {
+        whitespace_fields
+    } else if line.contains(';') {
+        line.split(';').map(str::trim).filter(|s| !s.is_empty()).collect()
+    } else if line.contains(',') {
+        line.split(',').map(str::trim).filter(|s| !s.is_empty()).collect()
+    } else {
+        whitespace_fields
+    }
 }
 
 fn parse_record<'a>(p: &[&'a str], line: usize) -> Result<(f64,f64,f64,&'a str),SurveyError> {
@@ -430,7 +444,7 @@ mod tests {
     #[test]
     fn house_chain_is_split_by_a_different_code() {
         let r = parse_text(
-            "NHA 0 0 1\nNHA1 10 0 1\nCNHA 20 0 1\nNHA2 30 0 1\nNHA 40 0 1\nNHA 50 0 1\n"
+            "NHA 0 0 1\nNHA1 10 0 1\nCNHA 20 0 1\nNHA2 30 0 1\nNHA 40 0 1\n"
         ).unwrap();
         let entities = survey_entities(&r);
         let lines = entities.iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
@@ -472,7 +486,7 @@ mod tests {
 
     #[test]
     fn closed_house_chain_has_closing_segment() {
-        let r = parse_text("NHA 0 0 1\\nNHA1 10 0 2\\nNHA2 10 10 3\\nNHA 0 0 1\\n").unwrap();
+        let r = parse_text("NHA 0 0 1\nNHA1 10 0 2\nNHA2 10 10 3\nNHA 0 0 1\n").unwrap();
         let houses: Vec<_> = r.points.iter().filter(|p| p.feature == FeatureKind::House).collect();
         assert!(FeatureKind::is_explicitly_closed_chain(&houses.iter().map(|p| (*p).clone()).collect::<Vec<_>>()));
         let lines = survey_entities(&r).into_iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
@@ -481,7 +495,7 @@ mod tests {
 
     #[test]
     fn open_house_chain_is_not_auto_closed() {
-        let r = parse_text("NHA 0 0 1\\nNHA1 10 0 2\\nNHA2 10 10 3\\n").unwrap();
+        let r = parse_text("NHA 0 0 1\nNHA1 10 0 2\nNHA2 10 10 3\n").unwrap();
         let houses: Vec<SurveyPoint> = r.points.iter().filter(|p| p.feature == FeatureKind::House).cloned().collect();
         assert!(!FeatureKind::is_explicitly_closed_chain(&houses));
         let lines = survey_entities(&r).into_iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
@@ -490,14 +504,14 @@ mod tests {
 
     #[test]
     fn house_aliases_share_one_chain() {
-        let r = parse_text("NHA 0 0 1\\nNHA1 10 0 2\\nGOCNHA 10 10 3\\nNHA2 0 10 4\\nNHA 0 0 1\\n").unwrap();
+        let r = parse_text("NHA 0 0 1\nNHA1 10 0 2\nGOCNHA 10 10 3\nNHA2 0 10 4\nNHA 0 0 1\n").unwrap();
         let lines = survey_entities(&r).into_iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
         assert_eq!(lines, 4);
     }
 
     #[test]
     fn gate_breaks_house_chain() {
-        let r = parse_text("NHA 0 0 1\\nNHA1 10 0 2\\nCNHA 10 5 3\\nNHA2 10 10 4\\nNHA 0 10 5\\n").unwrap();
+        let r = parse_text("NHA 0 0 1\nNHA1 10 0 2\nCNHA 10 5 3\nNHA2 10 10 4\nNHA 0 10 5\n").unwrap();
         let lines = survey_entities(&r).into_iter().filter(|e| matches!(e, codec::EntityType::Line(_))).count();
         assert_eq!(lines, 2);
     }
@@ -538,7 +552,7 @@ mod tests {
     }
     #[test]
     fn dxf_export_preserves_xyz_layers_lines_and_house_text() {
-        let input = parse_text("1,100,200,10\\nNHA,0,0,1\\nNHA,10,0,2\\nNHA,10,10,3\\nNHA,0,0,1\\n").unwrap();
+        let input = parse_text("1,100,200,10\nNHA,0,0,1\nNHA,10,0,2\nNHA,10,10,3\nNHA,0,0,1\n").unwrap();
         let dxf = export_dxf_survey(&input, HouseNumberingConfig { start_x:0.0,start_y:0.0,dir_x:1.0,dir_y:0.0 });
         assert!(dxf.contains("0\\nPOINT\\n8\\nNHA DAN\\n10\\n0.000000000000000\\n20\\n0.000000000000000\\n30\\n1.000000000000000"));
         assert!(dxf.contains("0\\nLINE\\n8\\nNHA DAN\\n10\\n0.000000000000000\\n20\\n0.000000000000000\\n30\\n1.000000000000000\\n11\\n10.000000000000000\\n21\\n0.000000000000000\\n31\\n2.000000000000000"));
