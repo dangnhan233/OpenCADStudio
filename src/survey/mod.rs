@@ -37,7 +37,7 @@ pub fn export_kml_file(path:impl AsRef<Path>, records:&[SurveyExportRecord])->Re
 pub fn export_dxf(records:&[SurveyExportRecord])->String {
     use std::collections::BTreeSet;
     let mut layers=BTreeSet::new();
-    for r in records { layers.insert(feature_layer_for_code(&r.code)); if r.house_number.is_some(){layers.insert("SO NHA");} }
+    for r in records { layers.insert(feature_layer_for_code(&r.code)); if r.house_number.is_some(){layers.insert("SO NHA".to_string());} }
     let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n");
     out.push_str("0\\nSECTION\\n2\\nTABLES\\n");
     out.push_str("0\\nTABLE\\n2\\nAPPID\\n70\\n1\\n0\\nAPPID\\n2\\nSURVEYCAD\\n70\\n0\\n0\\nENDTAB\\n");
@@ -356,7 +356,7 @@ fn fields(line: &str) -> Vec<&str> {
     else { line.split_whitespace().collect() }
 }
 
-fn parse_record(p: &[&str], line: usize) -> Result<(f64,f64,f64,&str),SurveyError> {
+fn parse_record<'a>(p: &[&'a str], line: usize) -> Result<(f64,f64,f64,&'a str),SurveyError> {
     if p.len() < 4 {
         return Err(SurveyError::InvalidRecord { line, text: p.join(" ") });
     }
@@ -532,7 +532,7 @@ mod tests {
     fn special_features_are_point_only_in_v1_1() {
         for code in ["CAY", "CDI", "HOGA", "CONG", "CONGTRON0,75", "CLANG", "CNHA", "LANG"] {
             let r = parse_text(&format!("{code} 10 20 30\n")).unwrap();
-            assert_eq!(r.points[0].is_point_feature(), true, "{code}");
+            assert_eq!(r.points[0].feature.is_point_feature(), true, "{code}");
             let entities = survey_entities(&r);
             assert_eq!(entities.len(), 1, "{code} must not invent geometry");
             assert!(matches!(entities[0], codec::EntityType::Point(_)));
@@ -572,6 +572,9 @@ impl crate::command::CadCommand for SurveyImportCommand {
         let path = text.trim();
         if path.is_empty() { return Some(crate::command::CmdResult::NeedPoint); }
         Some(crate::command::CmdResult::Dispatch(format!("IMPORTSURVEY {path}")))
+    }
+    fn on_point(&mut self, _pt: glam::DVec3) -> crate::command::CmdResult {
+        crate::command::CmdResult::NeedPoint
     }
     fn on_enter(&mut self) -> crate::command::CmdResult {
         crate::command::CmdResult::NeedPoint
@@ -707,5 +710,4 @@ pub fn point_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
         .filter(|e| matches!(e, codec::EntityType::Point(_)))
         .collect()
 }
-
 
