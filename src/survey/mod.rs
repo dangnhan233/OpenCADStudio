@@ -88,7 +88,7 @@ pub fn export_dxf_survey(import:&SurveyImport, cfg:HouseNumberingConfig)->String
     out.push_str("0\\nENDTAB\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nENTITIES\\n");
     for p in import.drawable_points() {
         let layer=p.feature.layer();
-        out.push_str(&format!("0\\nPOINT\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n{}",layer,p.x,p.y,p.z,dxf_xdata(&p.code,None)));
+        out.push_str(&format!("0\\nPOINT\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n{}",layer,p.x,p.y,p.z,dxf_xdata(&p.code,house_by_point.get(&p.id).copied())));
     }
     let mut chain:Vec<&SurveyPoint>=Vec::new();
     let flush=|chain:&mut Vec<&SurveyPoint>,out:&mut String| {
@@ -518,7 +518,7 @@ mod tests {
 
     #[test]
     fn house_features_are_stable_and_do_not_auto_close() {
-        let r = parse_text("NHA 0 0 1\nNHA1 10 0 2\nNHA2 10 10 3\nCNHA 5 0 4\nNHA 20 0 5\nNHA1 30 0 6\nNHA2 30 10 7\nNHA 20 0 5\n").unwrap();
+        let r = parse_text("NHA 0 0 1\nNHA1 10 0 2\nNHA2 10 10 3\nCNHA 5 0 4\nNHA 20 0 5\nNHA1 30 0 6\nNHA2 30 10 7\nNHA 20 10 8\nNHA 20 0 5\n").unwrap();
         let h = house_features(&r);
         assert_eq!(h.len(), 2);
         assert_eq!(h[0].id, 1);
