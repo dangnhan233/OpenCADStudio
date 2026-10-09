@@ -55,7 +55,7 @@ pub fn export_dxf(records:&[SurveyExportRecord])->String {
     out.push_str("0\\nENDSEC\\n0\\nEOF\\n"); out
 }
 
-fn dxf_escape(s:&str)->String { s.replace('\\n'," ").replace('\\r'," ") }
+fn dxf_escape(s:&str)->String { s.replace('\n'," ").replace('\r'," ") }
 
 /// DXF XDATA payload for SurveyCAD metadata. CODE stays verbatim; house number is numeric.
 fn dxf_xdata(code:&str, house_number:Option<usize>)->String {
@@ -367,19 +367,17 @@ fn parse_record<'a>(p: &[&'a str], line: usize) -> Result<(f64,f64,f64,&'a str),
     }
 
     // STT X Y Z CODE
-    if p.len() >= 5
-        && p[0].parse::<usize>().is_ok()
-        && let (Ok(x), Ok(y), Ok(z)) = (p[1].parse(), p[2].parse(), p[3].parse())
-    {
-        return Ok((x, y, z, p[4]));
+    if p.len() >= 5 && p[0].parse::<usize>().is_ok() {
+        if let (Ok(x), Ok(y), Ok(z)) = (p[1].parse(), p[2].parse(), p[3].parse()) {
+            return Ok((x, y, z, p[4]));
+        }
     }
 
     // STT CODE X Y Z
-    if p.len() >= 5
-        && p[0].parse::<usize>().is_ok()
-        && let (Ok(x), Ok(y), Ok(z)) = (p[2].parse(), p[3].parse(), p[4].parse())
-    {
-        return Ok((x, y, z, p[1]));
+    if p.len() >= 5 && p[0].parse::<usize>().is_ok() {
+        if let (Ok(x), Ok(y), Ok(z)) = (p[2].parse(), p[3].parse(), p[4].parse()) {
+            return Ok((x, y, z, p[1]));
+        }
     }
 
     Err(SurveyError::InvalidRecord { line, text: p.join(" ") })
@@ -710,4 +708,3 @@ pub fn point_entities(import: &SurveyImport) -> Vec<codec::EntityType> {
         .filter(|e| matches!(e, codec::EntityType::Point(_)))
         .collect()
 }
-
