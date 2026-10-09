@@ -525,7 +525,7 @@ mod tests {
         assert!(!h[0].closed);
         assert_eq!(h[0].point_ids, vec![1,2,3]);
         assert!(h[1].closed);
-        assert_eq!(h[1].point_ids, vec![5,6,7,8]);
+        assert_eq!(h[1].point_ids, vec![5,6,7,8,9]);
         assert_eq!((h[1].centroid_x, h[1].centroid_y), (25.0, 5.0));
     }
 
