@@ -29,7 +29,7 @@ impl OpenCADStudio {
                 }
                 Err(e) => {
                     self.command_line.push_error(crate::tf!("NUMBERHOUSES: {e}").as_ref());
-                    Some(Task::none())
+                    return Some(Task::none())
                 }
             }
         }
