@@ -4520,7 +4520,19 @@ mod ocs {
                 .map_err(|error| vm.new_value_error(error))?;
             }
             host_ctx::ensure_undo_started(host);
-            Ok(host.add_entity(built).value())
+            let mut local_copy = built.clone();
+            let handle = host.add_entity(built);
+            if !handle.is_null() && host.document().get_entity(handle).is_none() {
+                // Out-of-process HostApi writes are committed over IPC, but its
+                // document() value is a local snapshot and is not refreshed by
+                // add_entity(). Keep this dispatch's snapshot in sync so
+                // entity_descriptor()/entity_handles() can immediately read the
+                // handle returned by the host. This is only a local mirror; all
+                // subsequent edits still go through update/update_many.
+                local_copy.common_mut().handle = handle;
+                let _ = host.document_mut().add_entity(local_copy);
+            }
+            Ok(handle.value())
         })
         .ok_or_else(|| vm.new_runtime_error("ocs: not running inside a PY_ command".to_owned()))?
     }
