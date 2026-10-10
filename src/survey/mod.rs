@@ -38,29 +38,29 @@ pub fn export_dxf(records:&[SurveyExportRecord])->String {
     use std::collections::BTreeSet;
     let mut layers=BTreeSet::new();
     for r in records { layers.insert(feature_layer_for_code(&r.code)); if r.house_number.is_some(){layers.insert("SO NHA".to_string());} }
-    let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n");
-    out.push_str("0\\nSECTION\\n2\\nTABLES\\n");
-    out.push_str("0\\nTABLE\\n2\\nAPPID\\n70\\n1\\n0\\nAPPID\\n2\\nSURVEYCAD\\n70\\n0\\n0\\nENDTAB\\n");
-    out.push_str("0\\nTABLE\\n2\\nLAYER\\n70\\n");
-    out.push_str(&format!("{}\\n",layers.len()));
-    for layer in layers { out.push_str(&format!("0\\nLAYER\\n2\\n{}\\n70\\n0\\n62\\n7\\n6\\nCONTINUOUS\\n",dxf_escape(&layer))); }
-    out.push_str("0\\nENDTAB\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nENTITIES\\n");
+    let mut out=String::from("0\nSECTION\n2\nHEADER\n0\nENDSEC\n");
+    out.push_str("0\nSECTION\n2\nTABLES\n");
+    out.push_str("0\nTABLE\n2\nAPPID\n70\n1\n0\nAPPID\n2\nSURVEYCAD\n70\n0\n0\nENDTAB\n");
+    out.push_str("0\nTABLE\n2\nLAYER\n70\n");
+    out.push_str(&format!("{}\n",layers.len()));
+    for layer in layers { out.push_str(&format!("0\nLAYER\n2\n{}\n70\n0\n62\n7\n6\nCONTINUOUS\n",dxf_escape(&layer))); }
+    out.push_str("0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n");
     for r in records {
         let layer=feature_layer_for_code(&r.code);
-        out.push_str(&format!("0\\nPOINT\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n{}",dxf_escape(&layer),r.x,r.y,r.z,dxf_xdata(&r.code,r.house_number)));
+        out.push_str(&format!("0\nPOINT\n8\n{}\n10\n{:.15}\n20\n{:.15}\n30\n{:.15}\n{}",dxf_escape(&layer),r.x,r.y,r.z,dxf_xdata(&r.code,r.house_number)));
         if let Some(n)=r.house_number {
-            out.push_str(&format!("0\\nTEXT\\n8\\nSO NHA\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n40\\n1.0\\n1\\n{}\\n{}",r.x,r.y,r.z,n,dxf_xdata(&r.code,Some(n))));
+            out.push_str(&format!("0\nTEXT\n8\nSO NHA\n10\n{:.15}\n20\n{:.15}\n30\n{:.15}\n40\n1.0\n1\n{}\n{}",r.x,r.y,r.z,n,dxf_xdata(&r.code,Some(n))));
         }
     }
-    out.push_str("0\\nENDSEC\\n0\\nEOF\\n"); out
+    out.push_str("0\nENDSEC\n0\nEOF\n"); out
 }
 
 fn dxf_escape(s:&str)->String { s.replace('\n'," ").replace('\r'," ") }
 
 /// DXF XDATA payload for SurveyCAD metadata. CODE stays verbatim; house number is numeric.
 fn dxf_xdata(code:&str, house_number:Option<usize>)->String {
-    let mut s=format!("1001\\nSURVEYCAD\\n1000\\n{}\\n",dxf_escape(code));
-    if let Some(n)=house_number { s.push_str(&format!("1071\\n{}\\n",n)); }
+    let mut s=format!("1001\nSURVEYCAD\n1000\n{}\n",dxf_escape(code));
+    if let Some(n)=house_number { s.push_str(&format!("1071\n{}\n",n)); }
     s
 }
 
@@ -81,20 +81,20 @@ pub fn export_dxf_survey(import:&SurveyImport, cfg:HouseNumberingConfig)->String
     let numbers=assign_house_numbers(&houses,cfg);
     let mut house_by_point=BTreeMap::new();
     for n in numbers { if let Some(h)=houses.iter().find(|h|h.id==n.house_id) { for id in &h.point_ids { house_by_point.insert(*id,n.number); } } }
-    let mut out=String::from("0\\nSECTION\\n2\\nHEADER\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nTABLES\\n0\\nTABLE\\n2\\nAPPID\\n70\\n1\\n0\\nAPPID\\n2\\nSURVEYCAD\\n70\\n0\\n0\\nENDTAB\\n0\\nTABLE\\n2\\nLAYER\\n70\\n16\\n");
+    let mut out=String::from("0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nAPPID\n70\n1\n0\nAPPID\n2\nSURVEYCAD\n70\n0\n0\nENDTAB\n0\nTABLE\n2\nLAYER\n70\n16\n");
     for layer in ["TRAC DIEM","GIAO THONG","THUY HE","TUONG RAO","NHA DAN","CONG TRINH","DIEN","DIA HINH","CONG","CAY","MO","RUONG","CANH QUAN","UNKNOWN","TRAC DOC","SO NHA"] {
-        out.push_str(&format!("0\\nLAYER\\n2\\n{}\\n70\\n0\\n62\\n7\\n6\\nCONTINUOUS\\n",layer));
+        out.push_str(&format!("0\nLAYER\n2\n{}\n70\n0\n62\n7\n6\nCONTINUOUS\n",layer));
     }
-    out.push_str("0\\nENDTAB\\n0\\nENDSEC\\n0\\nSECTION\\n2\\nENTITIES\\n");
+    out.push_str("0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n");
     for p in import.drawable_points() {
         let layer=p.feature.layer();
-        out.push_str(&format!("0\\nPOINT\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n{}",layer,p.x,p.y,p.z,dxf_xdata(&p.code,None)));
+        out.push_str(&format!("0\nPOINT\n8\n{}\n10\n{:.15}\n20\n{:.15}\n30\n{:.15}\n{}",layer,p.x,p.y,p.z,dxf_xdata(&p.code,None)));
     }
     let mut chain:Vec<&SurveyPoint>=Vec::new();
     let flush=|chain:&mut Vec<&SurveyPoint>,out:&mut String| {
         for pair in chain.windows(2) {
             let a=pair[0]; let b=pair[1];
-            out.push_str(&format!("0\\nLINE\\n8\\n{}\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n11\\n{:.15}\\n21\\n{:.15}\\n31\\n{:.15}\\n{}",a.feature.layer(),a.x,a.y,a.z,b.x,b.y,b.z,dxf_xdata(&a.code,None)));
+            out.push_str(&format!("0\nLINE\n8\n{}\n10\n{:.15}\n20\n{:.15}\n30\n{:.15}\n11\n{:.15}\n21\n{:.15}\n31\n{:.15}\n{}",a.feature.layer(),a.x,a.y,a.z,b.x,b.y,b.z,dxf_xdata(&a.code,None)));
         }
         chain.clear();
     };
@@ -107,10 +107,10 @@ pub fn export_dxf_survey(import:&SurveyImport, cfg:HouseNumberingConfig)->String
     flush(&mut chain,&mut out);
     for h in houses {
         if let Some(n)=house_by_point.get(&h.point_ids[0]).copied() {
-            out.push_str(&format!("0\\nTEXT\\n8\\nSO NHA\\n10\\n{:.15}\\n20\\n{:.15}\\n30\\n{:.15}\\n40\\n1.0\\n1\\n{}\\n",h.centroid_x,h.centroid_y,h.centroid_z,n));
+            out.push_str(&format!("0\nTEXT\n8\nSO NHA\n10\n{:.15}\n20\n{:.15}\n30\n{:.15}\n40\n1.0\n1\n{}\n",h.centroid_x,h.centroid_y,h.centroid_z,n));
         }
     }
-    out.push_str("0\\nENDSEC\\n0\\nEOF\\n"); out
+    out.push_str("0\nENDSEC\n0\nEOF\n"); out
 }
 
 pub fn export_dxf_survey_file(path:impl AsRef<Path>, import:&SurveyImport, cfg:HouseNumberingConfig)->Result<(),SurveyError>{
@@ -554,13 +554,13 @@ mod tests {
     fn dxf_export_preserves_xyz_layers_lines_and_house_text() {
         let input = parse_text("1,100,200,10\nNHA,0,0,1\nNHA,10,0,2\nNHA,10,10,3\nNHA,0,0,1\n").unwrap();
         let dxf = export_dxf_survey(&input, HouseNumberingConfig { start_x:0.0,start_y:0.0,dir_x:1.0,dir_y:0.0 });
-        assert!(dxf.contains("0\\nPOINT\\n8\\nNHA DAN\\n10\\n0.000000000000000\\n20\\n0.000000000000000\\n30\\n1.000000000000000"));
-        assert!(dxf.contains("0\\nLINE\\n8\\nNHA DAN\\n10\\n0.000000000000000\\n20\\n0.000000000000000\\n30\\n1.000000000000000\\n11\\n10.000000000000000\\n21\\n0.000000000000000\\n31\\n2.000000000000000"));
-        assert!(dxf.contains("0\\nTEXT\\n8\\nSO NHA"));
-        assert!(dxf.contains("1\\n1\\n"));
-        assert!(dxf.contains("0\\nEOF\\n"));
-        assert!(dxf.contains("2\\nAPPID\\n70\\n1\\n0\\nAPPID\\n2\\nSURVEYCAD"));
-        assert!(dxf.contains("1001\\nSURVEYCAD\\n1000\\nNHA\\n1071\\n1"));
+        assert!(dxf.contains("0\nPOINT\n8\nNHA DAN\n10\n0.000000000000000\n20\n0.000000000000000\n30\n1.000000000000000"));
+        assert!(dxf.contains("0\nLINE\n8\nNHA DAN\n10\n0.000000000000000\n20\n0.000000000000000\n30\n1.000000000000000\n11\n10.000000000000000\n21\n0.000000000000000\n31\n2.000000000000000"));
+        assert!(dxf.contains("0\nTEXT\n8\nSO NHA"));
+        assert!(dxf.contains("1\n1\n"));
+        assert!(dxf.contains("0\nEOF\n"));
+        assert!(dxf.contains("2\nAPPID\n70\n1\n0\nAPPID\n2\nSURVEYCAD"));
+        assert!(dxf.contains("1001\nSURVEYCAD\n1000\nNHA\n1071\n1"));
     }
 
 }
