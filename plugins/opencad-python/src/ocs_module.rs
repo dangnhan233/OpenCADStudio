@@ -4267,10 +4267,20 @@ mod ocs {
     #[pyfunction]
     fn get_entity(handle: u64, vm: &VirtualMachine) -> PyResult<PyObjectRef> {
         let found =
-            host_ctx::with_host(|host| host.document().get_entity(Handle::new(handle)).cloned())
-                .ok_or_else(|| {
-                    vm.new_runtime_error("ocs: not running inside a PY_ command".to_owned())
-                })?;
+            host_ctx::with_host(|host| {
+                let document = host.document();
+                let entity = document.get_entity(Handle::new(handle)).cloned();
+                eprintln!(
+                    "[entity-trace] stage=entity_descriptor handle={} found={} document_count={}",
+                    handle,
+                    entity.is_some(),
+                    document.entities().count(),
+                );
+                entity
+            })
+            .ok_or_else(|| {
+                vm.new_runtime_error("ocs: not running inside a PY_ command".to_owned())
+            })?;
         match found {
             Some(entity) => entity_to_dict(vm, &entity),
             None => Ok(vm.ctx.none()),
