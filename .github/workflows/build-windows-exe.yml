@@ -1,0 +1,53 @@
+name: Windows executable
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - verify/surveycad-ci-fixes
+      - fix/surveycad-ci-rust-errors
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-exe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Windows executable
+        shell: pwsh
+        run: cargo build --locked --release --bin OpenCADStudio
+
+      - name: Verify executable artifact
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "target/release/OpenCADStudio.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) {
+            throw "Expected target/release/OpenCADStudio.exe was not produced"
+          }
+          $item = Get-Item $exe
+          if ($item.Length -le 0) {
+            throw "OpenCADStudio.exe is empty"
+          }
+          Get-FileHash $exe -Algorithm SHA256 | Format-List | Out-String | Write-Host
+          "Verified executable: $($item.FullName) ($($item.Length) bytes)" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenCADStudio-windows-x86_64-${{ github.sha }}
+          path: target/release/OpenCADStudio.exe
+          if-no-files-found: error
+          retention-days: 14
