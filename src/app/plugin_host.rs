@@ -350,6 +350,14 @@ impl<'a> HostSession<'a> {
             return handle;
         }
         let handle = self.app.tabs[self.tab].scene.add_entity(entity);
+        let host_has_handle = self.app.tabs[self.tab].scene.document.get_entity(handle).is_some();
+        eprintln!(
+            "[entity-trace] stage=HostSession::add_entity tab_id={} handle={} host_has_handle={} entity_count={}",
+            self.tab_id(),
+            handle.value(),
+            host_has_handle,
+            self.app.tabs[self.tab].scene.document.entities().count(),
+        );
         self.app.sync_registered_layers(self.tab);
         self.publish_document_view();
         handle

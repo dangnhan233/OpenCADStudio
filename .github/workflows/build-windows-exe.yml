@@ -1,0 +1,47 @@
+name: Build Windows EXE (SurveyCAD)
+
+# Chạy tay: tab Actions -> "Build Windows EXE (SurveyCAD)" -> Run workflow.
+# Kết quả: file OpenCADStudio-windows-x86_64-portable.exe nằm trong mục Artifacts.
+
+on:
+  workflow_dispatch:
+
+env:
+  RUST_MIN_STACK: "67108864"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Convert SVG icon to ICO
+        shell: pwsh
+        run: |
+          magick assets/logo.svg `
+            -define icon:auto-resize=16,24,32,48,64,128,256 `
+            packaging/windows/AppIcon.ico
+
+      - name: Build
+        shell: bash
+        run: cargo build --locked --release --bin OpenCADStudio
+
+      - name: Rename portable exe
+        shell: pwsh
+        run: Copy-Item target\release\OpenCADStudio.exe OpenCADStudio-windows-x86_64-portable.exe
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenCADStudio-windows-x86_64-portable
+          path: OpenCADStudio-windows-x86_64-portable.exe
+          if-no-files-found: error

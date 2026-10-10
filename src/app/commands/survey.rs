@@ -4,14 +4,52 @@ impl OpenCADStudio {
     pub(super) fn dispatch_survey(&mut self, cmd: &str, i: usize) -> Option<Task<Message>> {
 
         if let Some(args) = cmd.strip_prefix("NUMBERHOUSES").map(str::trim) {
-            let parts: Vec<&str> = args.split_whitespace().collect();
-            if parts.is_empty() {
-                self.command_line.push_error("NUMBERHOUSES: specify survey TXT/CSV path and optional direction DX DY.");
+            // Accept quoted paths so survey files can live in directories with spaces.
+            let (path_text, direction_args) = if let Some(quoted) = args.strip_prefix('"') {
+                match quoted.find('"') {
+                    Some(end) => (&quoted[..end], quoted[end + 1..].split_whitespace().collect::<Vec<_>>()),
+                    None => {
+                        self.command_line.push_error("NUMBERHOUSES: missing closing quote around survey path.");
+                        return Some(Task::none());
+                    }
+                }
+            } else {
+                let mut split = args.split_whitespace();
+                let Some(path) = split.next() else {
+                    self.command_line.push_error("NUMBERHOUSES: specify survey TXT/CSV path and optional direction DX DY.");
+                    return Some(Task::none());
+                };
+                (path, split.collect::<Vec<_>>())
+            };
+            if path_text.is_empty() {
+                self.command_line.push_error("NUMBERHOUSES: specify a non-empty survey TXT/CSV path.");
                 return Some(Task::none());
             }
-            let path = std::path::PathBuf::from(parts[0].trim_matches('"'));
-            let dx = parts.get(1).and_then(|v| v.parse::<f64>().ok()).unwrap_or(1.0);
-            let dy = parts.get(2).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+            if direction_args.len() > 2 {
+                self.command_line.push_error("NUMBERHOUSES: expected a survey path and at most two direction values DX DY.");
+                return Some(Task::none());
+            }
+            let path = std::path::PathBuf::from(path_text);
+            let dx = match direction_args.first() {
+                Some(value) => match value.parse::<f64>() {
+                    Ok(value) if value.is_finite() => value,
+                    _ => {
+                        self.command_line.push_error("NUMBERHOUSES: DX must be a finite number.");
+                        return Some(Task::none());
+                    }
+                },
+                None => 1.0,
+            };
+            let dy = match direction_args.get(1) {
+                Some(value) => match value.parse::<f64>() {
+                    Ok(value) if value.is_finite() => value,
+                    _ => {
+                        self.command_line.push_error("NUMBERHOUSES: DY must be a finite number.");
+                        return Some(Task::none());
+                    }
+                },
+                None => 0.0,
+            };
             if dx == 0.0 && dy == 0.0 {
                 self.command_line.push_error("NUMBERHOUSES: direction must not be zero.");
                 return Some(Task::none());
@@ -25,11 +63,11 @@ impl OpenCADStudio {
                         start_x: 0.0, start_y: 0.0, dir_x: dx, dir_y: dy,
                     });
                     self.command_line.push_output(crate::tf!("NUMBERHOUSES: {} house label(s) ready.", entities.len()).as_ref());
-                    Some(self.apply_cmd_result(crate::command::CmdResult::CommitEntitiesAndExit(entities)))
+                    return Some(self.apply_cmd_result(crate::command::CmdResult::CommitEntitiesAndExit(entities)))
                 }
                 Err(e) => {
                     self.command_line.push_error(crate::tf!("NUMBERHOUSES: {e}").as_ref());
-                    Some(Task::none())
+                    return Some(Task::none())
                 }
             }
         }
