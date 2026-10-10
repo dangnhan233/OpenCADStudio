@@ -25,11 +25,11 @@ impl OpenCADStudio {
                         start_x: 0.0, start_y: 0.0, dir_x: dx, dir_y: dy,
                     });
                     self.command_line.push_output(crate::tf!("NUMBERHOUSES: {} house label(s) ready.", entities.len()).as_ref());
-                    Some(self.apply_cmd_result(crate::command::CmdResult::CommitEntitiesAndExit(entities)))
+                    return Some(self.apply_cmd_result(crate::command::CmdResult::CommitEntitiesAndExit(entities)))
                 }
                 Err(e) => {
                     self.command_line.push_error(crate::tf!("NUMBERHOUSES: {e}").as_ref());
-                    Some(Task::none())
+                    return Some(Task::none())
                 }
             }
         }
