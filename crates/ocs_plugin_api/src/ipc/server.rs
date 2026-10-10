@@ -75,7 +75,18 @@ pub fn handle_plugin_request(
             on_start_interactive(command_id);
             PluginResponse::Ok
         }
-        DocumentSnapshot => PluginResponse::Document(Box::new(addressable_document_snapshot(host))),
+        DocumentSnapshot => {
+            let snapshot = addressable_document_snapshot(host);
+            eprintln!(
+                "[entity-trace] stage=DocumentSnapshot tab_id={} host_count={} snapshot_count={} host_handles_tail={:?} snapshot_handles_tail={:?}",
+                host.tab_id(),
+                host.document().entities().count(),
+                snapshot.entities().count(),
+                host.document().entities().map(|entity| entity.common().handle.value()).collect::<Vec<_>>().into_iter().rev().take(8).collect::<Vec<_>>(),
+                snapshot.entities().map(|entity| entity.common().handle.value()).collect::<Vec<_>>().into_iter().rev().take(8).collect::<Vec<_>>(),
+            );
+            PluginResponse::Document(Box::new(snapshot))
+        },
         OpenDocumentView => match host.document_view() {
             Some(info) => PluginResponse::DocumentView {
                 path: info.path,
